@@ -1,14 +1,14 @@
 {
     "name": "EspSoftwareSerial",
     "version": "8.2.0",
-    "description": "Implementation of the Arduino software serial for ESP8266/ESP32.",
+    "description": "Implementation of the Arduino software serial for ESP8266/ESP32. Extended to support 9bit UART/Multidrop Bus (MDB)",
     "keywords": [
         "serial", "io", "softwareserial"
     ],
     "repository":
     {
         "type": "git",
-        "url": "https://github.com/plerup/espsoftwareserial"
+        "url": "https://github.com/JPRauwolf/espsoftwareserial"
     },
     "authors": [
         {
@@ -16,6 +16,9 @@
         },
         {
             "name": "Peter Lerup"
+        },
+        {
+            "name": "JP100099"
         }
     ],
     "license": "LGPL-2.1+",
