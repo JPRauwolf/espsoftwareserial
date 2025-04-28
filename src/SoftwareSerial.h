@@ -122,42 +122,52 @@ enum Config {
     SWSERIAL_6N1,
     SWSERIAL_7N1,
     SWSERIAL_8N1,
+    SWSERIAL_9N1,
     SWSERIAL_5E1 = PARITY_EVEN,
     SWSERIAL_6E1,
     SWSERIAL_7E1,
     SWSERIAL_8E1,
+    SWSERIAL_9E1,    
     SWSERIAL_5O1 = PARITY_ODD,
     SWSERIAL_6O1,
     SWSERIAL_7O1,
     SWSERIAL_8O1,
+    SWSERIAL_9O1,
     SWSERIAL_5M1 = PARITY_MARK,
     SWSERIAL_6M1,
     SWSERIAL_7M1,
     SWSERIAL_8M1,
+    SWSERIAL_9M1,
     SWSERIAL_5S1 = PARITY_SPACE,
     SWSERIAL_6S1,
     SWSERIAL_7S1,
     SWSERIAL_8S1,
+    SWSERIAL_9S1,
     SWSERIAL_5N2 = 0200 | PARITY_NONE,
     SWSERIAL_6N2,
     SWSERIAL_7N2,
     SWSERIAL_8N2,
+    SWSERIAL_9N2,
     SWSERIAL_5E2 = 0200 | PARITY_EVEN,
     SWSERIAL_6E2,
     SWSERIAL_7E2,
     SWSERIAL_8E2,
+    SWSERIAL_9E2,
     SWSERIAL_5O2 = 0200 | PARITY_ODD,
     SWSERIAL_6O2,
     SWSERIAL_7O2,
     SWSERIAL_8O2,
+    SWSERIAL_9O2,
     SWSERIAL_5M2 = 0200 | PARITY_MARK,
     SWSERIAL_6M2,
     SWSERIAL_7M2,
     SWSERIAL_8M2,
+    SWSERIAL_9M2,
     SWSERIAL_5S2 = 0200 | PARITY_SPACE,
     SWSERIAL_6S2,
     SWSERIAL_7S2,
     SWSERIAL_8S2,
+    SWSERIAL_9S2,
 };
 
 /// This class is compatible with the corresponding AVR one, however,
@@ -247,6 +257,23 @@ public:
     size_t readBytes(char* buffer, size_t size) override {
         return readBytes(reinterpret_cast<uint8_t*>(buffer), size);
     }
+
+    /// The read(buffer, size) functions are non-blocking, the same as readBytes but without timeout
+    int read(uint16_t* buffer, size_t size)
+    #if defined(ESP8266)
+            override
+    #endif
+            ;
+        /// @returns The number of words read into buffer, up to size. Times out if the limit set through
+        ///          Stream::setTimeout() is reached.
+        size_t readWords(uint16_t* buffer, size_t size) override;
+        /// @returns The number of words read into buffer, up to size. Times out if the limit set through
+        ///          Stream::setTimeout() is reached.
+        size_t readWords(char* buffer, size_t size) override {
+            return readWords(reinterpret_cast<uint8_t*>(buffer), size);
+        }
+    
+
     void flush() override;
     size_t write(uint8_t byte) override;
     size_t write(uint8_t byte, Parity parity);
@@ -258,6 +285,13 @@ public:
     size_t write(const char* buffer, size_t size, Parity parity) {
         return write(reinterpret_cast<const uint8_t*>(buffer), size, parity);
     }
+
+    size_t write(uint16_t word) override;
+    size_t write(uint16_t word, Parity parity);
+    size_t write(const uint16_t* buffer, size_t size) override;
+    size_t write(const uint16_t* buffer, size_t size, Parity parity);
+
+
     operator bool() const {
         return (-1 == m_rxPin || m_rxValid) && (-1 == m_txPin || m_txValid) && !(-1 == m_rxPin && m_oneWire);
     }
@@ -376,7 +410,9 @@ private:
     uint8_t m_parityOutPos;
     int8_t m_rxLastBit; // 0 thru (m_pduBits - m_stopBits - 1): data/parity bits. -1: start bit. (m_pduBits - 1): stop bit.
     uint8_t m_rxCurByte = 0;
-    std::unique_ptr<circular_queue<uint8_t> > m_buffer;
+    uint8_t m_rxCurWord = 0;
+    std::unique_ptr<circular_queue<> > m_buffer;
+    //std::unique_ptr<circular_queue<uint16_t> > m_buffer_word;
     std::unique_ptr<circular_queue<uint8_t> > m_parityBuffer;
     uint32_t m_periodStart;
     uint32_t m_periodDuration;

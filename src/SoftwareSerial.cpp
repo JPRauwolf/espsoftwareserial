@@ -94,7 +94,15 @@ void UARTBase::beginRx(bool hasPullUp, int bufCapacity, int isrBufCapacity) {
     m_rxGPIOHasPullUp = hasPullUp;
     m_rxReg = portInputRegister(digitalPinToPort(m_rxPin));
     m_rxBitMask = digitalPinToBitMask(m_rxPin);
-    m_buffer.reset(new circular_queue<uint8_t>((bufCapacity > 0) ? bufCapacity : 64));
+
+    // for 9 bits a word is needed for every data
+    if (m_dataBits < 9) {
+        m_buffer.reset(new circular_queue<uint8_t>((bufCapacity > 0) ? bufCapacity : 64));
+    }
+    else {
+        m_buffer.reset(new circular_queue<uint16_t>((bufCapacity > 0) ? bufCapacity : 64));
+    }
+
     if (m_parityMode)
     {
         m_parityBuffer.reset(new circular_queue<uint8_t>((m_buffer->capacity() + 7) / 8));
@@ -216,6 +224,9 @@ int UARTBase::read() {
 }
 
 int UARTBase::read(uint8_t* buffer, size_t size) {
+    if (m_dataBits > 8) {
+        return -1;
+    }
     if (!m_rxValid) { return 0; }
     int avail;
     if (0 == (avail = m_buffer->pop_n(buffer, size))) {
@@ -233,6 +244,10 @@ int UARTBase::read(uint8_t* buffer, size_t size) {
 }
 
 size_t UARTBase::readBytes(uint8_t* buffer, size_t size) {
+    if (m_dataBits > 8) {
+        return -1;
+    }
+
     if (!m_rxValid || !size) { return 0; }
     size_t count = 0;
     auto start = millis();
@@ -240,6 +255,55 @@ size_t UARTBase::readBytes(uint8_t* buffer, size_t size) {
         auto readCnt = read(&buffer[count], size - count);
         count += readCnt;
         if (count >= size) break;
+        if (readCnt) {
+            start = millis();
+        }
+        else {
+            optimistic_yield(1000UL);
+        }
+    } while (millis() - start < _timeout);
+    return count;
+}
+
+int EspSoftwareSerial::UARTBase::read(uint16_t* buffer, size_t size) {
+    if (m_dataBits <= 8) {
+        return -1;
+    }
+    if (!m_rxValid) {
+        return 0;
+    }
+    int avail;
+    if (0 == (avail = m_buffer->pop_n(buffer, size))) {
+        rxBits();
+        avail = m_buffer->pop_n(buffer, size);
+    }
+    if (!avail)
+        return 0;
+    if (m_parityBuffer) {
+        uint32_t parityBits = avail;
+        while (m_parityOutPos >>= 1)
+            ++parityBits;
+        m_parityOutPos = (1 << (parityBits % 8));
+        m_parityBuffer->pop_n(nullptr, parityBits / 8);
+    }
+    return avail;
+}
+
+size_t UARTBase::readWords(uint16_t* buffer, size_t size) {
+    if (m_dataBits <= 8) {
+        return -1;
+    }
+
+    if (!m_rxValid || !size) {
+        return 0;
+    }
+    size_t count = 0;
+    auto start = millis();
+    do {
+        auto readCnt = read(&buffer[count], size - count);
+        count += readCnt;
+        if (count >= size)
+            break;
         if (readCnt) {
             start = millis();
         }
@@ -344,6 +408,9 @@ size_t UARTBase::write(const uint8_t* buffer, size_t size) {
 }
 
 size_t IRAM_ATTR UARTBase::write(const uint8_t* buffer, size_t size, Parity parity) {
+    if (m_dataBits <= 8) {
+        return -1;
+    }
     if (m_rxValid) { rxBits(); }
     if (!m_txValid) { return -1; }
 
@@ -402,7 +469,114 @@ size_t IRAM_ATTR UARTBase::write(const uint8_t* buffer, size_t size, Parity pari
         word |= byte;
         // Start bit: LOW
         word <<= 1;
-        if (m_invert) word = ~word;
+        if (m_invert)
+            word = ~word;
+        for (int i = 0; i <= m_pduBits; ++i) {
+            bool pb = b;
+            b = word & (1UL << i);
+            if (!pb && b) {
+                writePeriod(dutyCycle, offCycle, withStopBit);
+                withStopBit = false;
+                dutyCycle = offCycle = 0;
+            }
+            if (b) {
+                dutyCycle += m_bitTicks;
+            }
+            else {
+                offCycle += m_bitTicks;
+            }
+        }
+        withStopBit = true;
+    }
+    writePeriod(dutyCycle, offCycle, true);
+    if (!m_intTxEnabled) {
+        // restore the interrupt state if applicable
+        restoreInterrupts();
+    }
+    if (m_txEnableValid) {
+        digitalWrite(m_txEnablePin, LOW);
+    }
+    return size;
+}
+
+size_t UARTBase::write(uint16_t word) {
+    return write(&word, 1);
+}
+
+size_t UARTBase::write(uint16_t word, Parity parity) {
+    return write(&word, 1, parity);
+}
+
+size_t UARTBase::write(const uint16_t* buffer, size_t size) {
+    return write(buffer, size, m_parityMode);
+}
+
+size_t IRAM_ATTR UARTBase::write(const uint16_t* buffer, size_t size, Parity parity) {
+    if (m_dataBits > 8) {
+        return -1;
+    }
+    if (m_rxValid) {
+        rxBits();
+    }
+    if (!m_txValid) {
+        return -1;
+    }
+
+    if (m_txEnableValid) {
+        digitalWrite(m_txEnablePin, HIGH);
+    }
+    // Stop bit: if inverted, LOW, otherwise HIGH
+    bool b = !m_invert;
+    uint32_t dutyCycle = 0;
+    uint32_t offCycle = 0;
+    if (!m_intTxEnabled) {
+        // Disable interrupts in order to get a clean transmit timing
+        disableInterrupts();
+    }
+    const uint32_t dataMask = ((1UL << m_dataBits) - 1);
+    bool withStopBit = true;
+    m_periodDuration = 0;
+    m_periodStart = ticks();
+    for (size_t cnt = 0; cnt < size; ++cnt) {
+        uint16_t data = pgm_read_word(buffer + cnt) & dataMask;
+        // push LSB start-data-parity-stop bit pattern into uint32_t
+        // Stop bits: HIGH
+        uint32_t word = ~0UL;
+        // inverted parity bit, performance tweak for xor all-bits-set word
+        if (parity && m_parityMode) {
+            uint32_t parityBit;
+            switch (parity) {
+            case PARITY_EVEN:
+                // from inverted, so use odd parity
+                parityBit = data;
+                parityBit ^= parityBit >> 4;
+                parityBit &= 0xf;
+                parityBit = (0x9669 >> parityBit) & 1;
+                break;
+            case PARITY_ODD:
+                // from inverted, so use even parity
+                parityBit = data;
+                parityBit ^= parityBit >> 4;
+                parityBit &= 0xf;
+                parityBit = (0x6996 >> parityBit) & 1;
+                break;
+            case PARITY_MARK:
+                parityBit = 0;
+                break;
+            case PARITY_SPACE:
+                // suppresses warning parityBit uninitialized
+            default:
+                parityBit = 1;
+                break;
+            }
+            word ^= parityBit;
+        }
+        word <<= m_dataBits;
+        word |= data;
+        // Start bit: LOW
+        word <<= 1;
+        if (m_invert)
+            word = ~word;
         for (int i = 0; i <= m_pduBits; ++i) {
             bool pb = b;
             b = word & (1UL << i);
@@ -616,4 +790,3 @@ template size_t IRAM_ATTR circular_queue<uint32_t, UARTBase*>::available() const
 template bool IRAM_ATTR circular_queue<uint32_t, UARTBase*>::push(uint32_t&&);
 template bool IRAM_ATTR circular_queue<uint32_t, UARTBase*>::push(const uint32_t&);
 #endif // __GNUC__ < 12
-
