@@ -49,7 +49,8 @@ ALWAYS_INLINE_ATTR inline void IRAM_ATTR UARTBase::restoreInterrupts()
 
 constexpr uint8_t BYTE_ALL_BITS_SET = ~static_cast<uint8_t>(0);
 
-UARTBase::UARTBase() {
+UARTBase::UARTBase()
+{
 }
 
 UARTBase::UARTBase(int8_t rxPin, int8_t txPin, bool invert)
@@ -59,27 +60,35 @@ UARTBase::UARTBase(int8_t rxPin, int8_t txPin, bool invert)
     m_invert = invert;
 }
 
-UARTBase::~UARTBase() {
+UARTBase::~UARTBase()
+{
     end();
 }
 
-void UARTBase::setRxGPIOPinMode() {
-    if (m_rxValid) {
+void UARTBase::setRxGPIOPinMode()
+{
+    if (m_rxValid)
+    {
         pinMode(m_rxPin, m_rxGPIOHasPullUp && m_rxGPIOPullUpEnabled ? INPUT_PULLUP : INPUT);
     }
 }
 
-void UARTBase::setTxGPIOPinMode() {
-    if (m_txValid) {
+void UARTBase::setTxGPIOPinMode()
+{
+    if (m_txValid)
+    {
         pinMode(m_txPin, m_txGPIOOpenDrain ? OUTPUT_OPEN_DRAIN : OUTPUT);
     }
 }
 
 void UARTBase::begin(uint32_t baud, Config config,
-    int8_t rxPin, int8_t txPin,
-    bool invert) {
-    if (-1 != rxPin) m_rxPin = rxPin;
-    if (-1 != txPin) m_txPin = txPin;
+                     int8_t rxPin, int8_t txPin,
+                     bool invert)
+{
+    if (-1 != rxPin)
+        m_rxPin = rxPin;
+    if (-1 != txPin)
+        m_txPin = txPin;
     m_oneWire = (m_rxPin == m_txPin);
     m_invert = invert;
     m_dataBits = 5 + (config & 07);
@@ -90,16 +99,19 @@ void UARTBase::begin(uint32_t baud, Config config,
     m_intTxEnabled = true;
 }
 
-void UARTBase::beginRx(bool hasPullUp, int bufCapacity, int isrBufCapacity) {
+void UARTBase::beginRx(bool hasPullUp, int bufCapacity, int isrBufCapacity)
+{
     m_rxGPIOHasPullUp = hasPullUp;
     m_rxReg = portInputRegister(digitalPinToPort(m_rxPin));
     m_rxBitMask = digitalPinToBitMask(m_rxPin);
 
     // for 9 bits a word is needed for every data
-    if (m_dataBits < 9) {
+    if (m_dataBits < 9)
+    {
         m_buffer.reset(new circular_queue<uint8_t>((bufCapacity > 0) ? bufCapacity : 64));
     }
-    else {
+    else
+    {
         m_buffer.reset(new circular_queue<uint16_t>((bufCapacity > 0) ? bufCapacity : 64));
     }
 
@@ -108,21 +120,23 @@ void UARTBase::beginRx(bool hasPullUp, int bufCapacity, int isrBufCapacity) {
         m_parityBuffer.reset(new circular_queue<uint8_t>((m_buffer->capacity() + 7) / 8));
         m_parityInPos = m_parityOutPos = 1;
     }
-    m_isrBuffer.reset(new circular_queue<uint32_t, UARTBase*>((isrBufCapacity > 0) ?
-        isrBufCapacity : m_buffer->capacity() * (2 + m_dataBits + static_cast<bool>(m_parityMode))));
-    if (m_buffer && (!m_parityMode || m_parityBuffer) && m_isrBuffer) {
+    m_isrBuffer.reset(new circular_queue<uint32_t, UARTBase *>((isrBufCapacity > 0) ? isrBufCapacity : m_buffer->capacity() * (2 + m_dataBits + static_cast<bool>(m_parityMode))));
+    if (m_buffer && (!m_parityMode || m_parityBuffer) && m_isrBuffer)
+    {
         m_rxValid = true;
         setRxGPIOPinMode();
     }
 }
 
-void UARTBase::beginTx() {
+void UARTBase::beginTx()
+{
 #if !defined(ESP8266)
     m_txReg = portOutputRegister(digitalPinToPort(m_txPin));
 #endif
     m_txBitMask = digitalPinToBitMask(m_txPin);
     m_txValid = true;
-    if (!m_oneWire) {
+    if (!m_oneWire)
+    {
         setTxGPIOPinMode();
         digitalWrite(m_txPin, !m_invert);
     }
@@ -132,82 +146,107 @@ void UARTBase::end()
 {
     enableRx(false);
     m_txValid = false;
-    if (m_buffer) {
+    if (m_buffer)
+    {
         m_buffer.reset();
     }
     m_parityBuffer.reset();
-    if (m_isrBuffer) {
+    if (m_isrBuffer)
+    {
         m_isrBuffer.reset();
     }
 }
 
-uint32_t UARTBase::baudRate() {
+uint32_t UARTBase::baudRate()
+{
     return microsToTicks(1000000UL) / m_bitTicks;
 }
 
-void UARTBase::setTransmitEnablePin(int8_t txEnablePin) {
-    if (-1 != txEnablePin) {
+void UARTBase::setTransmitEnablePin(int8_t txEnablePin)
+{
+    if (-1 != txEnablePin)
+    {
         m_txEnableValid = true;
         m_txEnablePin = txEnablePin;
         pinMode(m_txEnablePin, OUTPUT);
         digitalWrite(m_txEnablePin, LOW);
     }
-    else {
+    else
+    {
         m_txEnableValid = false;
     }
 }
 
-void UARTBase::enableIntTx(bool on) {
+void UARTBase::enableIntTx(bool on)
+{
     m_intTxEnabled = on;
 }
 
-void UARTBase::enableRxGPIOPullUp(bool on) {
+void UARTBase::enableRxGPIOPullUp(bool on)
+{
     m_rxGPIOPullUpEnabled = on;
     setRxGPIOPinMode();
 }
 
-void UARTBase::enableTxGPIOOpenDrain(bool on) {
+void UARTBase::enableTxGPIOOpenDrain(bool on)
+{
     m_txGPIOOpenDrain = on;
     setTxGPIOPinMode();
 }
 
-void UARTBase::enableTx(bool on) {
-    if (m_txValid && m_oneWire) {
-        if (on) {
+void UARTBase::enableTx(bool on)
+{
+    if (m_txValid && m_oneWire)
+    {
+        if (on)
+        {
             enableRx(false);
             setTxGPIOPinMode();
             digitalWrite(m_txPin, !m_invert);
         }
-        else {
+        else
+        {
             setRxGPIOPinMode();
             enableRx(true);
         }
     }
 }
 
-void UARTBase::enableRx(bool on) {
-    if (m_rxValid && on != m_rxEnabled) {
-        if (on) {
+void UARTBase::enableRx(bool on)
+{
+    if (m_rxValid && on != m_rxEnabled)
+    {
+        if (on)
+        {
             m_rxLastBit = m_pduBits - 1;
             // Init to stop bit level and current tick
             m_isrLastTick = (ticks() | 1) ^ m_invert;
             if (m_bitTicks >= microsToTicks(1000000UL) / 74880UL)
-                attachInterruptArg(digitalPinToInterrupt(m_rxPin), reinterpret_cast<void (*)(void*)>(rxBitISR), this, CHANGE);
+                attachInterruptArg(digitalPinToInterrupt(m_rxPin), reinterpret_cast<void (*)(void *)>(rxBitISR), this, CHANGE);
             else
-                attachInterruptArg(digitalPinToInterrupt(m_rxPin), reinterpret_cast<void (*)(void*)>(rxBitSyncISR), this, m_invert ? RISING : FALLING);
+                attachInterruptArg(digitalPinToInterrupt(m_rxPin), reinterpret_cast<void (*)(void *)>(rxBitSyncISR), this, m_invert ? RISING : FALLING);
         }
-        else {
+        else
+        {
             detachInterrupt(digitalPinToInterrupt(m_rxPin));
         }
         m_rxEnabled = on;
     }
 }
 
-int UARTBase::read() {
-    if (!m_rxValid) { return -1; }
-    if (!m_buffer->available()) {
+int UARTBase::read()
+{
+    if (!m_rxValid)
+    {
+        return -1;
+    }
+    if (!m_buffer->available())
+    {
         rxBits();
-        if (!m_buffer->available()) { return -1; }
+        if (!m_buffer->available())
+        {
+            return -1;
+        }
     }
     auto val = m_buffer->pop();
     if (m_parityBuffer)
@@ -223,63 +262,26 @@ int UARTBase::read() {
     return val;
 }
 
-int UARTBase::read(uint8_t* buffer, size_t size) {
-    if (m_dataBits > 8) {
+int UARTBase::read(uint8_t *buffer, size_t size)
+{
+    if (m_dataBits > 8)
+    {
         return -1;
     }
-    if (!m_rxValid) { return 0; }
-    int avail;
-    if (0 == (avail = m_buffer->pop_n(buffer, size))) {
-        rxBits();
-        avail = m_buffer->pop_n(buffer, size);
-    }
-    if (!avail) return 0;
-    if (m_parityBuffer) {
-        uint32_t parityBits = avail;
-        while (m_parityOutPos >>= 1) ++parityBits;
-        m_parityOutPos = (1 << (parityBits % 8));
-        m_parityBuffer->pop_n(nullptr, parityBits / 8);
-    }
-    return avail;
-}
-
-size_t UARTBase::readBytes(uint8_t* buffer, size_t size) {
-    if (m_dataBits > 8) {
-        return -1;
-    }
-
-    if (!m_rxValid || !size) { return 0; }
-    size_t count = 0;
-    auto start = millis();
-    do {
-        auto readCnt = read(&buffer[count], size - count);
-        count += readCnt;
-        if (count >= size) break;
-        if (readCnt) {
-            start = millis();
-        }
-        else {
-            optimistic_yield(1000UL);
-        }
-    } while (millis() - start < _timeout);
-    return count;
-}
-
-int EspSoftwareSerial::UARTBase::read(uint16_t* buffer, size_t size) {
-    if (m_dataBits <= 8) {
-        return -1;
-    }
-    if (!m_rxValid) {
+    if (!m_rxValid)
+    {
         return 0;
     }
     int avail;
-    if (0 == (avail = m_buffer->pop_n(buffer, size))) {
+    if (0 == (avail = m_buffer->pop_n(buffer, size)))
+    {
         rxBits();
         avail = m_buffer->pop_n(buffer, size);
     }
     if (!avail)
         return 0;
-    if (m_parityBuffer) {
+    if (m_parityBuffer)
+    {
         uint32_t parityBits = avail;
         while (m_parityOutPos >>= 1)
             ++parityBits;
@@ -289,44 +291,119 @@ int EspSoftwareSerial::UARTBase::read(uint16_t* buffer, size_t size) {
     return avail;
 }
 
-size_t UARTBase::readWords(uint16_t* buffer, size_t size) {
-    if (m_dataBits <= 8) {
+size_t UARTBase::readBytes(uint8_t *buffer, size_t size)
+{
+    if (m_dataBits > 8)
+    {
         return -1;
     }
 
-    if (!m_rxValid || !size) {
+    if (!m_rxValid || !size)
+    {
         return 0;
     }
     size_t count = 0;
     auto start = millis();
-    do {
+    do
+    {
         auto readCnt = read(&buffer[count], size - count);
         count += readCnt;
         if (count >= size)
             break;
-        if (readCnt) {
+        if (readCnt)
+        {
             start = millis();
         }
-        else {
+        else
+        {
             optimistic_yield(1000UL);
         }
     } while (millis() - start < _timeout);
     return count;
 }
 
-int UARTBase::available() {
-    if (!m_rxValid) { return 0; }
+int EspSoftwareSerial::UARTBase::read(uint16_t *buffer, size_t size)
+{
+    if (m_dataBits <= 8)
+    {
+        return -1;
+    }
+    if (!m_rxValid)
+    {
+        return 0;
+    }
+    int avail;
+    if (0 == (avail = m_buffer->pop_n(buffer, size)))
+    {
+        rxBits();
+        avail = m_buffer->pop_n(buffer, size);
+    }
+    if (!avail)
+        return 0;
+    if (m_parityBuffer)
+    {
+        uint32_t parityBits = avail;
+        while (m_parityOutPos >>= 1)
+            ++parityBits;
+        m_parityOutPos = (1 << (parityBits % 8));
+        m_parityBuffer->pop_n(nullptr, parityBits / 8);
+    }
+    return avail;
+}
+
+size_t UARTBase::readWords(uint16_t *buffer, size_t size)
+{
+    if (m_dataBits <= 8)
+    {
+        return -1;
+    }
+
+    if (!m_rxValid || !size)
+    {
+        return 0;
+    }
+    size_t count = 0;
+    auto start = millis();
+    do
+    {
+        auto readCnt = read(&buffer[count], size - count);
+        count += readCnt;
+        if (count >= size)
+            break;
+        if (readCnt)
+        {
+            start = millis();
+        }
+        else
+        {
+            optimistic_yield(1000UL);
+        }
+    } while (millis() - start < _timeout);
+    return count;
+}
+
+int UARTBase::available()
+{
+    if (!m_rxValid)
+    {
+        return 0;
+    }
     rxBits();
     int avail = m_buffer->available();
-    if (!avail) {
+    if (!avail)
+    {
         optimistic_yield(10000UL);
     }
     return avail;
 }
 
-void UARTBase::lazyDelay() {
+void UARTBase::lazyDelay()
+{
     // Re-enable interrupts while delaying to avoid other tasks piling up
-    if (!m_intTxEnabled) { restoreInterrupts(); }
+    if (!m_intTxEnabled)
+    {
+        restoreInterrupts();
+    }
     const auto expired = ticks() - m_periodStart;
     const int32_t remaining = m_periodDuration - expired;
     const uint32_t ms = remaining > 0 ? ticksToMicros(remaining) / 1000UL : 0;
@@ -341,12 +418,17 @@ void UARTBase::lazyDelay() {
     // Assure that below-ms part of delays are not elided
     preciseDelay();
     // Disable interrupts again if applicable
-    if (!m_intTxEnabled) { disableInterrupts(); }
+    if (!m_intTxEnabled)
+    {
+        disableInterrupts();
+    }
 }
 
-void IRAM_ATTR UARTBase::preciseDelay() {
+void IRAM_ATTR UARTBase::preciseDelay()
+{
     uint32_t now;
-    do {
+    do
+    {
         now = ticks();
     } while ((now - m_periodStart) < m_periodDuration);
     m_periodDuration = 0;
@@ -354,26 +436,32 @@ void IRAM_ATTR UARTBase::preciseDelay() {
 }
 
 void IRAM_ATTR UARTBase::writePeriod(
-    uint32_t dutyCycle, uint32_t offCycle, bool withStopBit) {
+    uint32_t dutyCycle, uint32_t offCycle, bool withStopBit)
+{
     preciseDelay();
     if (dutyCycle)
     {
 #if defined(ESP8266)
-        if (16 == m_txPin) {
+        if (16 == m_txPin)
+        {
             GP16O = 1;
         }
-        else {
+        else
+        {
             GPOS = m_txBitMask;
         }
 #else
         *m_txReg = *m_txReg | m_txBitMask;
 #endif
         m_periodDuration += dutyCycle;
-        if (offCycle || (withStopBit && !m_invert)) {
-            if (!withStopBit || m_invert) {
+        if (offCycle || (withStopBit && !m_invert))
+        {
+            if (!withStopBit || m_invert)
+            {
                 preciseDelay();
             }
-            else {
+            else
+            {
                 lazyDelay();
             }
         }
@@ -381,47 +469,63 @@ void IRAM_ATTR UARTBase::writePeriod(
     if (offCycle)
     {
 #if defined(ESP8266)
-        if (16 == m_txPin) {
+        if (16 == m_txPin)
+        {
             GP16O = 0;
         }
-        else {
+        else
+        {
             GPOC = m_txBitMask;
         }
 #else
         *m_txReg = *m_txReg & ~m_txBitMask;
 #endif
         m_periodDuration += offCycle;
-        if (withStopBit && m_invert) lazyDelay();
+        if (withStopBit && m_invert)
+            lazyDelay();
     }
 }
 
-size_t UARTBase::write(uint8_t byte) {
+size_t UARTBase::write(uint8_t byte)
+{
     return write(&byte, 1);
 }
 
-size_t UARTBase::write(uint8_t byte, Parity parity) {
+size_t UARTBase::write(uint8_t byte, Parity parity)
+{
     return write(&byte, 1, parity);
 }
 
-size_t UARTBase::write(const uint8_t* buffer, size_t size) {
+size_t UARTBase::write(const uint8_t *buffer, size_t size)
+{
     return write(buffer, size, m_parityMode);
 }
 
-size_t IRAM_ATTR UARTBase::write(const uint8_t* buffer, size_t size, Parity parity) {
-    if (m_dataBits <= 8) {
+size_t IRAM_ATTR UARTBase::write(const uint8_t *buffer, size_t size, Parity parity)
+{
+    if (m_dataBits <= 8)
+    {
         return -1;
     }
-    if (m_rxValid) { rxBits(); }
-    if (!m_txValid) { return -1; }
+    if (m_rxValid)
+    {
+        rxBits();
+    }
+    if (!m_txValid)
+    {
+        return -1;
+    }
 
-    if (m_txEnableValid) {
+    if (m_txEnableValid)
+    {
         digitalWrite(m_txEnablePin, HIGH);
     }
     // Stop bit: if inverted, LOW, otherwise HIGH
     bool b = !m_invert;
     uint32_t dutyCycle = 0;
     uint32_t offCycle = 0;
-    if (!m_intTxEnabled) {
+    if (!m_intTxEnabled)
+    {
         // Disable interrupts in order to get a clean transmit timing
         disableInterrupts();
     }
@@ -429,7 +533,8 @@ size_t IRAM_ATTR UARTBase::write(const uint8_t* buffer, size_t size, Parity pari
     bool withStopBit = true;
     m_periodDuration = 0;
     m_periodStart = ticks();
-    for (size_t cnt = 0; cnt < size; ++cnt) {
+    for (size_t cnt = 0; cnt < size; ++cnt)
+    {
         uint8_t byte = pgm_read_byte(buffer + cnt) & dataMask;
         // push LSB start-data-parity-stop bit pattern into uint32_t
         // Stop bits: HIGH
@@ -471,65 +576,80 @@ size_t IRAM_ATTR UARTBase::write(const uint8_t* buffer, size_t size, Parity pari
         word <<= 1;
         if (m_invert)
             word = ~word;
-        for (int i = 0; i <= m_pduBits; ++i) {
+        for (int i = 0; i <= m_pduBits; ++i)
+        {
             bool pb = b;
             b = word & (1UL << i);
-            if (!pb && b) {
+            if (!pb && b)
+            {
                 writePeriod(dutyCycle, offCycle, withStopBit);
                 withStopBit = false;
                 dutyCycle = offCycle = 0;
             }
-            if (b) {
+            if (b)
+            {
                 dutyCycle += m_bitTicks;
             }
-            else {
+            else
+            {
                 offCycle += m_bitTicks;
             }
         }
         withStopBit = true;
     }
     writePeriod(dutyCycle, offCycle, true);
-    if (!m_intTxEnabled) {
+    if (!m_intTxEnabled)
+    {
         // restore the interrupt state if applicable
         restoreInterrupts();
     }
-    if (m_txEnableValid) {
+    if (m_txEnableValid)
+    {
         digitalWrite(m_txEnablePin, LOW);
     }
     return size;
 }
 
-size_t UARTBase::write(uint16_t word) {
+size_t UARTBase::write(uint16_t word)
+{
     return write(&word, 1);
 }
 
-size_t UARTBase::write(uint16_t word, Parity parity) {
+size_t UARTBase::write(uint16_t word, Parity parity)
+{
     return write(&word, 1, parity);
 }
 
-size_t UARTBase::write(const uint16_t* buffer, size_t size) {
+size_t UARTBase::write(const uint16_t *buffer, size_t size)
+{
     return write(buffer, size, m_parityMode);
 }
 
-size_t IRAM_ATTR UARTBase::write(const uint16_t* buffer, size_t size, Parity parity) {
-    if (m_dataBits > 8) {
+size_t IRAM_ATTR UARTBase::write(const uint16_t *buffer, size_t size, Parity parity)
+{
+    if (m_dataBits > 8)
+    {
         return -1;
     }
-    if (m_rxValid) {
+    if (m_rxValid)
+    {
         rxBits();
     }
-    if (!m_txValid) {
+    if (!m_txValid)
+    {
         return -1;
     }
 
-    if (m_txEnableValid) {
+    if (m_txEnableValid)
+    {
         digitalWrite(m_txEnablePin, HIGH);
     }
     // Stop bit: if inverted, LOW, otherwise HIGH
     bool b = !m_invert;
     uint32_t dutyCycle = 0;
     uint32_t offCycle = 0;
-    if (!m_intTxEnabled) {
+    if (!m_intTxEnabled)
+    {
         // Disable interrupts in order to get a clean transmit timing
         disableInterrupts();
     }
@@ -537,15 +657,18 @@ size_t IRAM_ATTR UARTBase::write(const uint16_t* buffer, size_t size, Parity par
     bool withStopBit = true;
     m_periodDuration = 0;
     m_periodStart = ticks();
-    for (size_t cnt = 0; cnt < size; ++cnt) {
+    for (size_t cnt = 0; cnt < size; ++cnt)
+    {
         uint16_t data = pgm_read_word(buffer + cnt) & dataMask;
         // push LSB start-data-parity-stop bit pattern into uint32_t
         // Stop bits: HIGH
         uint32_t word = ~0UL;
         // inverted parity bit, performance tweak for xor all-bits-set word
-        if (parity && m_parityMode) {
+        if (parity && m_parityMode)
+        {
             uint32_t parityBit;
-            switch (parity) {
+            switch (parity)
+            {
             case PARITY_EVEN:
                 // from inverted, so use odd parity
                 parityBit = data;
@@ -577,36 +700,46 @@ size_t IRAM_ATTR UARTBase::write(const uint16_t* buffer, size_t size, Parity par
         word <<= 1;
         if (m_invert)
             word = ~word;
-        for (int i = 0; i <= m_pduBits; ++i) {
+        for (int i = 0; i <= m_pduBits; ++i)
+        {
             bool pb = b;
             b = word & (1UL << i);
-            if (!pb && b) {
+            if (!pb && b)
+            {
                 writePeriod(dutyCycle, offCycle, withStopBit);
                 withStopBit = false;
                 dutyCycle = offCycle = 0;
             }
-            if (b) {
+            if (b)
+            {
                 dutyCycle += m_bitTicks;
             }
-            else {
+            else
+            {
                 offCycle += m_bitTicks;
             }
         }
         withStopBit = true;
     }
     writePeriod(dutyCycle, offCycle, true);
-    if (!m_intTxEnabled) {
+    if (!m_intTxEnabled)
+    {
         // restore the interrupt state if applicable
         restoreInterrupts();
     }
-    if (m_txEnableValid) {
+    if (m_txEnableValid)
+    {
         digitalWrite(m_txEnablePin, LOW);
     }
     return size;
 }
 
-void UARTBase::flush() {
-    if (!m_rxValid) { return; }
+void UARTBase::flush()
+{
+    if (!m_rxValid)
+    {
+        return;
+    }
     m_buffer->flush();
     if (m_parityBuffer)
     {
@@ -615,31 +748,42 @@ void UARTBase::flush() {
     }
 }
 
-bool UARTBase::overflow() {
+bool UARTBase::overflow()
+{
     bool res = m_overflow;
     m_overflow = false;
     return res;
 }
 
-int UARTBase::peek() {
-    if (!m_rxValid) { return -1; }
-    if (!m_buffer->available()) {
+int UARTBase::peek()
+{
+    if (!m_rxValid)
+    {
+        return -1;
+    }
+    if (!m_buffer->available())
+    {
         rxBits();
-        if (!m_buffer->available()) return -1;
+        if (!m_buffer->available())
+            return -1;
     }
     auto val = m_buffer->peek();
-    if (m_parityBuffer) m_lastReadParity = m_parityBuffer->peek() & m_parityOutPos;
+    if (m_parityBuffer)
+        m_lastReadParity = m_parityBuffer->peek() & m_parityOutPos;
     return val;
 }
 
-void UARTBase::rxBits() {
+void UARTBase::rxBits()
+{
 #ifdef ESP8266
-    if (m_isrOverflow.load()) {
+    if (m_isrOverflow.load())
+    {
         m_overflow = true;
         m_isrOverflow.store(false);
     }
 #else
-    if (m_isrOverflow.exchange(false)) {
+    if (m_isrOverflow.exchange(false))
+    {
         m_overflow = true;
     }
 #endif
@@ -650,9 +794,11 @@ void UARTBase::rxBits() {
     // and there was also no next start bit yet, so one word may be pending.
     // Check that there was no new ISR data received in the meantime, inserting an
     // extraneous stop level bit out of sequence breaks rx.
-    if (m_rxLastBit < m_pduBits - 1) {
+    if (m_rxLastBit < m_pduBits - 1)
+    {
         const uint32_t detectionTicks = (m_pduBits - 1 - m_rxLastBit) * m_bitTicks;
-        if (!m_isrBuffer->available() && ticks() - m_isrLastTick > detectionTicks) {
+        if (!m_isrBuffer->available() && ticks() - m_isrLastTick > detectionTicks)
+        {
             // Produce faux stop bit level, prevents start bit maldetection
             // tick's LSB is repurposed for the level bit
             rxBits(((m_isrLastTick + detectionTicks) | 1) ^ m_invert);
@@ -660,7 +806,8 @@ void UARTBase::rxBits() {
     }
 }
 
-void UARTBase::rxBits(const uint32_t isrTick) {
+void UARTBase::rxBits(const uint32_t isrTick)
+{
     const bool level = (m_isrLastTick & 1) ^ m_invert;
 
     // error introduced by edge value in LSB of isrTick is negligible
@@ -668,27 +815,36 @@ void UARTBase::rxBits(const uint32_t isrTick) {
     m_isrLastTick = isrTick;
 
     uint32_t bits = ticksDiff / m_bitTicks;
-    if (ticksDiff % m_bitTicks > (m_bitTicks >> 1)) ++bits;
-    while (bits > 0) {
+    if (ticksDiff % m_bitTicks > (m_bitTicks >> 1))
+        ++bits;
+    while (bits > 0)
+    {
         // start bit detection
-        if (m_rxLastBit >= (m_pduBits - 1)) {
+        if (m_rxLastBit >= (m_pduBits - 1))
+        {
             // leading edge of start bit?
-            if (level) break;
+            if (level)
+                break;
             m_rxLastBit = -1;
             --bits;
             continue;
         }
         // data bits
-        if (m_rxLastBit < (m_dataBits - 1)) {
+        if (m_rxLastBit < (m_dataBits - 1))
+        {
             uint8_t dataBits = min(bits, static_cast<uint32_t>(m_dataBits - 1 - m_rxLastBit));
             m_rxLastBit += dataBits;
             bits -= dataBits;
             m_rxCurByte >>= dataBits;
-            if (level) { m_rxCurByte |= (BYTE_ALL_BITS_SET << (8 - dataBits)); }
+            if (level)
+            {
+                m_rxCurByte |= (BYTE_ALL_BITS_SET << (8 - dataBits));
+            }
             continue;
         }
         // parity bit
-        if (m_parityMode && m_rxLastBit == (m_dataBits - 1)) {
+        if (m_parityMode && m_rxLastBit == (m_dataBits - 1))
+        {
             ++m_rxLastBit;
             --bits;
             m_rxCurParity = level;
@@ -697,18 +853,23 @@ void UARTBase::rxBits(const uint32_t isrTick) {
         // stop bits
         // Store the received value in the buffer unless we have an overflow
         // if not high stop bit level, discard word
-        if (bits >= static_cast<uint32_t>(m_pduBits - 1 - m_rxLastBit) && level) {
+        if (bits >= static_cast<uint32_t>(m_pduBits - 1 - m_rxLastBit) && level)
+        {
             m_rxCurByte >>= (sizeof(uint8_t) * 8 - m_dataBits);
-            if (!m_buffer->push(m_rxCurByte)) {
+            if (!m_buffer->push(m_rxCurByte))
+            {
                 m_overflow = true;
             }
-            else {
+            else
+            {
                 if (m_parityBuffer)
                 {
-                    if (m_rxCurParity) {
+                    if (m_rxCurParity)
+                    {
                         m_parityBuffer->pushpeek() |= m_parityInPos;
                     }
-                    else {
+                    else
+                    {
                         m_parityBuffer->pushpeek() &= ~m_parityInPos;
                     }
                     m_parityInPos <<= 1;
@@ -728,19 +889,23 @@ void UARTBase::rxBits(const uint32_t isrTick) {
     }
 }
 
-void IRAM_ATTR UARTBase::rxBitISR(UARTBase* self) {
+void IRAM_ATTR UARTBase::rxBitISR(UARTBase *self)
+{
     const bool level = *self->m_rxReg & self->m_rxBitMask;
     const uint32_t curTick = ticks();
     const bool empty = !self->m_isrBuffer->available();
 
     // Store level and tick in the buffer unless we have an overflow
     // tick's LSB is repurposed for the level bit
-    if (!self->m_isrBuffer->push((curTick | 1U) ^ !level)) self->m_isrOverflow.store(true);
+    if (!self->m_isrBuffer->push((curTick | 1U) ^ !level))
+        self->m_isrOverflow.store(true);
     // Trigger rx callback only when receiver is starved
-    if (empty) self->m_rxHandler();
+    if (empty)
+        self->m_rxHandler();
 }
 
-void IRAM_ATTR UARTBase::rxBitSyncISR(UARTBase* self) {
+void IRAM_ATTR UARTBase::rxBitSyncISR(UARTBase *self)
+{
     bool level = self->m_invert;
     const uint32_t start = ticks();
     uint32_t wait = self->m_bitTicks;
@@ -748,31 +913,39 @@ void IRAM_ATTR UARTBase::rxBitSyncISR(UARTBase* self) {
 
     // Store level and tick in the buffer unless we have an overflow
     // tick's LSB is repurposed for the level bit
-    if (!self->m_isrBuffer->push(((start + wait) | 1U) ^ !level)) self->m_isrOverflow.store(true);
+    if (!self->m_isrBuffer->push(((start + wait) | 1U) ^ !level))
+        self->m_isrOverflow.store(true);
 
-    for (uint32_t i = 0; i < self->m_pduBits; ++i) {
-        while (ticks() - start < wait) {};
+    for (uint32_t i = 0; i < self->m_pduBits; ++i)
+    {
+        while (ticks() - start < wait)
+        {
+        };
         wait += self->m_bitTicks;
 
         // Store level and tick in the buffer unless we have an overflow
         // tick's LSB is repurposed for the level bit
         if (static_cast<bool>(*self->m_rxReg & self->m_rxBitMask) != level)
         {
-            if (!self->m_isrBuffer->push(((start + wait) | 1U) ^ level)) self->m_isrOverflow.store(true);
+            if (!self->m_isrBuffer->push(((start + wait) | 1U) ^ level))
+                self->m_isrOverflow.store(true);
             level = !level;
         }
     }
     // Trigger rx callback only when receiver is starved
-    if (empty) self->m_rxHandler();
+    if (empty)
+        self->m_rxHandler();
 }
 
-void UARTBase::onReceive(const Delegate<void(), void*>& handler) {
+void UARTBase::onReceive(const Delegate<void(), void *> &handler)
+{
     disableInterrupts();
     m_rxHandler = handler;
     restoreInterrupts();
 }
 
-void UARTBase::onReceive(Delegate<void(), void*>&& handler) {
+void UARTBase::onReceive(Delegate<void(), void *> &&handler)
+{
     disableInterrupts();
     m_rxHandler = std::move(handler);
     restoreInterrupts();
@@ -785,8 +958,8 @@ void UARTBase::onReceive(Delegate<void(), void*>&& handler) {
 // Delegate<>::operator (), circular_queue<>::available,
 // circular_queue<>::available_for_push, circular_queue<>::push_peek, circular_queue<>::push
 
-template void IRAM_ATTR delegate::detail::DelegateImpl<void*, void>::operator()() const;
-template size_t IRAM_ATTR circular_queue<uint32_t, UARTBase*>::available() const;
-template bool IRAM_ATTR circular_queue<uint32_t, UARTBase*>::push(uint32_t&&);
-template bool IRAM_ATTR circular_queue<uint32_t, UARTBase*>::push(const uint32_t&);
+template void IRAM_ATTR delegate::detail::DelegateImpl<void *, void>::operator()() const;
+template size_t IRAM_ATTR circular_queue<uint32_t, UARTBase *>::available() const;
+template bool IRAM_ATTR circular_queue<uint32_t, UARTBase *>::push(uint32_t &&);
+template bool IRAM_ATTR circular_queue<uint32_t, UARTBase *>::push(const uint32_t &);
 #endif // __GNUC__ < 12
